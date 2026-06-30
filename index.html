@@ -635,6 +635,7 @@ const deviceId = getDeviceId();
 let db        = null;
 let messaging = null;
 let swReg     = null;
+let swReady   = null;
 let userName  = "";
 let toastTimer = null;
 
@@ -851,7 +852,19 @@ async function sendMessage() {
 
 // Push notifications
 async function registerToken() {
-  if (!messaging || !db || !swReg) {
+  if (!messaging || !db) {
+    return;
+  }
+  if (!swReg && swReady) {
+    try {
+      swReg = await swReady;
+    } catch (err) {
+      console.warn("SW not ready:", err);
+      return;
+    }
+  }
+  if (!swReg) {
+    console.warn("No service worker registration — cannot get FCM token");
     return;
   }
   try {
@@ -863,6 +876,8 @@ async function registerToken() {
       await setDoc(doc(db, "tokens", deviceId), {
         token, deviceId, name: userName, updatedAt: serverTimestamp()
       });
+    } else {
+      console.warn("FCM returned empty token");
     }
   } catch (err) {
     console.warn("FCM token error:", err);
@@ -1034,7 +1049,8 @@ document.getElementById("settings-signout").addEventListener("click", () => {
 
 // Service worker
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./firebase-messaging-sw.js")
+  swReady = navigator.serviceWorker.register("./firebase-messaging-sw.js");
+  swReady
     .then(reg => { swReg = reg; })
     .catch(err => console.warn("SW registration failed:", err));
 }
