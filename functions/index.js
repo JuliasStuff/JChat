@@ -21,7 +21,7 @@ const fcm = getMessaging();
 // Replace with your GitHub Pages URL
 const APP_URL = "https://juliasstuff.github.io/JChat/";
 
-exports.onNewMessage = onDocumentCreated("messages/{msgId}", async event => {
+exports.notifyOnMessage = onDocumentCreated("messages/{msgId}", async event => {
   const msg = event.data?.data();
   if (!msg?.text || !msg?.author) {
     console.log("Skipping: missing text or author");
