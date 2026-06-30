@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>JChat</title>
+  <meta name="description" content="Private group chat." />
+  <meta name="theme-color" content="#1A535C" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="JChat" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="JChat" />
+  <style>
+    :root {
+      --teal:     #1A535C;
+      --teal-2:   #2a7d8a;
+      --cyan:     #4ECDC4;
+      --mint:     #F7FFF7;
+      --pink:     #FF6B6B;
+      --gold:     #FFE66D;
+      --ink:      #1A535C;
+      --ink-soft: #5a8a90;
+      --bg:       #F7FFF7;
+      --panel:    #ffffff;
+      --panel-2:  #e8f8f7;
+      --line:     #c5e8e6;
+      --shadow:   0 4px 14px rgba(26,83,92,.10);
+      --shadow-lg:0 8px 28px rgba(26,83,92,.15);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 8px;
+    }
+
+    /* Join screen */
+    #join-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 24px;
+      gap: 16px;
+      background: radial-gradient(ellipse at 60% 20%, #d4f4f2 0%, var(--bg) 65%);
+      overflow-y: auto;
+    }
+
+    .join-logo {
+      width: 88px;
+      height: 88px;
+      background: linear-gradient(135deg, var(--teal), var(--teal-2));
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 44px;
+      box-shadow: var(--shadow), 0 0 0 8px rgba(78,205,196,.15);
+      flex-shrink: 0;
+    }
+
+    .join-title {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--teal);
+      letter-spacing: -1px;
+    }
+
+    .join-subtitle {
+      font-size: 14px;
+      color: var(--ink-soft);
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    .join-form {
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .field-lbl {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .field-lbl input {
+      padding: 13px 15px;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      background: var(--panel);
+      color: var(--ink);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+
+    .field-lbl input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(78,205,196,.2);
+    }
+
+    #join-error {
+      font-size: 13px;
+      color: var(--pink);
+      min-height: 18px;
+      text-align: center;
+    }
+
+    .btn-primary {
+      padding: 14px;
+      background: linear-gradient(135deg, var(--teal), var(--teal-2));
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      border-radius: 12px;
+      border: none;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,.15);
+      transition: opacity .15s;
+      letter-spacing: .2px;
+    }
+
+    .btn-primary:hover { opacity: .9; }
+    .btn-primary:disabled { opacity: .45; cursor: default; }
+
+    /* Chat screen */
+    #chat-screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top bar */
+    .topbar {
+      background: var(--teal);
+      color: #fff;
+      padding: 10px 14px;
+      padding-top: max(10px, env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .topbar-logo {
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .topbar-info { flex: 1; }
+
+    .topbar-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -.3px;
+    }
+
+    .topbar-status {
+      font-size: 11px;
+      opacity: .8;
+      margin-top: 1px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--gold);
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .topbar-btn {
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      color: #fff;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+
+    .topbar-btn:hover { background: rgba(255,255,255,.22); }
+    .topbar-btn.active { background: rgba(255,230,109,.25); border-color: var(--gold); }
+
+    /* Notification banner */
+    #notif-banner {
+      background: linear-gradient(90deg, var(--teal-2), var(--teal));
+      color: #fff;
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    #notif-banner span { flex: 1; }
+
+    #notif-allow-btn {
+      background: var(--gold);
+      color: var(--teal);
+      font-weight: 700;
+      font-size: 12px;
+      padding: 5px 13px;
+      border-radius: 20px;
+      border: none;
+      white-space: nowrap;
+      transition: opacity .15s;
+    }
+
+    #notif-allow-btn:hover { opacity: .85; }
+
+    #notif-dismiss {
+      background: transparent;
+      color: rgba(255,255,255,.65);
+      font-size: 18px;
+      border: none;
+      padding: 2px 4px;
+      line-height: 1;
+    }
+
+    /* Message list */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .day-divider {
+      align-self: center;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      color: var(--ink-soft);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 14px;
+      margin: 10px 0 4px;
+      flex-shrink: 0;
+    }
+
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      max-width: 78%;
+      flex-shrink: 0;
+    }
+
+    .msg-row.mine   { align-self: flex-end;   align-items: flex-end; }
+    .msg-row.theirs { align-self: flex-start; align-items: flex-start; }
+
+    .msg-author {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      padding: 0 5px;
+      margin-bottom: 2px;
+    }
+
+    .msg-bubble {
+      padding: 9px 13px;
+      border-radius: 18px;
+      font-size: 15px;
+      line-height: 1.48;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .mine .msg-bubble {
+      background: var(--cyan);
+      color: var(--teal);
+      border-bottom-right-radius: 5px;
+    }
+
+    .theirs .msg-bubble {
+      background: var(--panel);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-bottom-left-radius: 5px;
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--ink-soft);
+      padding: 2px 5px 0;
+    }
+
+    .state-msg {
+      align-self: center;
+      color: var(--ink-soft);
+      font-size: 14px;
+      padding: 48px 24px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* Input bar */
+    .input-bar {
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+      padding: 8px 12px;
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    #msg-input {
+      flex: 1;
+      padding: 10px 15px;
+      border: 1.5px solid var(--line);
+      border-radius: 22px;
+      font-size: 16px;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--ink);
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      line-height: 1.45;
+      overflow-y: auto;
+      transition: border-color .15s;
+    }
+
+    #msg-input:focus { border-color: var(--cyan); }
+
+    #send-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--teal), var(--teal-2));
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(26,83,92,.3);
+      transition: opacity .15s, transform .1s;
+    }
+
+    #send-btn:hover:not(:disabled) { opacity: .9; }
+    #send-btn:active:not(:disabled) { transform: scale(.9); }
+    #send-btn:disabled { opacity: .35; cursor: default; }
+
+    /* Settings modal */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(26,83,92,.35);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-bg.open { display: flex; }
+
+    .sheet {
+      width: 100%;
+      max-width: 480px;
+      background: var(--panel);
+      border-radius: 20px 20px 0 0;
+      padding: 0 0 max(20px, env(safe-area-inset-bottom));
+      box-shadow: var(--shadow-lg);
+    }
+
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--line);
+      border-radius: 4px;
+      margin: 10px auto 0;
+    }
+
+    .sheet-head {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sheet-head h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .sheet-body {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .setting-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .setting-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    .setting-row input {
+      padding: 11px 14px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      color: var(--ink);
+      background: var(--bg);
+      outline: none;
+    }
+
+    .setting-row input:focus {
+      border-color: var(--cyan);
+    }
+
+    .btn-save {
+      padding: 12px;
+      background: linear-gradient(135deg, var(--teal), var(--teal-2));
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      border: none;
+      transition: opacity .15s;
+    }
+
+    .btn-save:hover { opacity: .9; }
+
+    .btn-signout {
+      padding: 12px;
+      background: transparent;
+      color: var(--pink);
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: 1.5px solid var(--pink);
+      transition: background .15s;
+    }
+
+    .btn-signout:hover { background: #fff0f0; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--teal);
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity .25s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 9999;
+      box-shadow: 0 4px 16px rgba(26,83,92,.3);
+    }
+
+    #toast.show { opacity: 1; }
+
+    @media (max-width: 430px) {
+      .msg-row { max-width: 86%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Join screen -->
+<div id="join-screen">
+  <div class="join-logo">💬</div>
+  <div class="join-title">JChat</div>
+  <p class="join-subtitle">Private group chat.<br>Enter your name and the invite code to join.</p>
+  <form class="join-form" id="join-form" novalidate>
+    <label class="field-lbl">
+      Your name
+      <input id="join-name" type="text" placeholder="e.g. Julia"
+             autocomplete="name" maxlength="30" />
+    </label>
+    <label class="field-lbl">
+      Invite code
+      <input id="join-code" type="password" placeholder="Enter invite code"
+             autocomplete="off" />
+    </label>
+    <div id="join-error" aria-live="polite"></div>
+    <button class="btn-primary" type="submit" id="join-btn">Join Chat →</button>
+  </form>
+</div>
+
+<!-- Chat screen -->
+<div id="chat-screen">
+  <header class="topbar">
+    <span class="topbar-logo">💬</span>
+    <div class="topbar-info">
+      <div class="topbar-title">JChat</div>
+      <div class="topbar-status" id="topbar-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Connecting…</span>
+      </div>
+    </div>
+    <button class="topbar-btn" id="notif-btn" title="Enable notifications" aria-label="Notifications">🔔</button>
+    <button class="topbar-btn" id="settings-btn" title="Settings" aria-label="Settings">⚙️</button>
+  </header>
+
+  <div id="notif-banner" hidden>
+    <span>Get alerted when new messages arrive</span>
+    <button id="notif-allow-btn">Enable</button>
+    <button id="notif-dismiss" aria-label="Dismiss">✕</button>
+  </div>
+
+  <div id="messages" aria-live="polite" aria-label="Messages"></div>
+
+  <div class="input-bar">
+    <textarea id="msg-input" placeholder="Message…" rows="1"
+              aria-label="Type a message"></textarea>
+    <button id="send-btn" disabled aria-label="Send message">↑</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-bg" id="settings-modal">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2>Settings</h2>
+    </div>
+    <div class="sheet-body">
+      <div class="setting-row">
+        <div class="setting-label">Display name</div>
+        <input id="settings-name" type="text" maxlength="30" autocomplete="name" />
+      </div>
+      <button class="btn-save" id="settings-save">Save name</button>
+      <button class="btn-signout" id="settings-signout">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, query, orderBy, limit,
+  onSnapshot, serverTimestamp, doc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import {
+  getMessaging, getToken, onMessage
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging.js";
+
+// CONFIG — paste your Firebase values here after creating the project.
+// See the setup steps in firebase-messaging-sw.js and functions/index.js.
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCb5Se60vt7DAw167Zw2K7I4tfCthKaAuw",
+  authDomain:        "jchat-9b112.firebaseapp.com",
+  projectId:         "jchat-9b112",
+  storageBucket:     "jchat-9b112.firebasestorage.app",
+  messagingSenderId: "455369385950",
+  appId:             "1:455369385950:web:c451f0c411dcf16fb31f4f"
+};
+// Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
+const VAPID_KEY   = "BLs_HEELyNMOrZwokC3a018V0IYr3Tu1it52gWB1WeV1w3hbxYAyXU-4psq2Mlm-blIIYhnfhvKntUXsw7JhXaQ";
+// Choose any secret word/phrase and share it with your family
+const INVITE_CODE = "8642";
+
+const FIREBASE_READY = !Object.values(FIREBASE_CONFIG).some(v => v.startsWith("PASTE_"))
+                    && !INVITE_CODE.startsWith("REPLACE_");
+
+const STORAGE_NAME_KEY = "jchat-name";
+const STORAGE_ID_KEY   = "jchat-device-id";
+
+function getDeviceId() {
+  let id = localStorage.getItem(STORAGE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID
+      ? crypto.randomUUID()
+      : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem(STORAGE_ID_KEY, id);
+  }
+  return id;
+}
+
+const deviceId = getDeviceId();
+let db        = null;
+let messaging = null;
+let swReg     = null;
+let userName  = "";
+let toastTimer = null;
+
+// Toast
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+// Date helpers (local timezone)
+function localDateKey(d) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(d);
+}
+
+function todayKey() {
+  return localDateKey(new Date());
+}
+
+function formatTime(ts) {
+  if (!ts) {
+    return "";
+  }
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function dayLabel(ts) {
+  if (!ts) {
+    return "";
+  }
+  const d  = ts.toDate ? ts.toDate() : new Date(ts);
+  const dk = localDateKey(d);
+  if (dk === todayKey()) {
+    return "Today";
+  }
+  const yd = new Date();
+  yd.setDate(yd.getDate() - 1);
+  if (dk === localDateKey(yd)) {
+    return "Yesterday";
+  }
+  return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
+// Textarea auto-resize
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+// Scroll helpers
+function isNearBottom() {
+  const el = document.getElementById("messages");
+  return (el.scrollHeight - el.scrollTop - el.clientHeight) < 100;
+}
+
+function scrollToBottom(force) {
+  if (!force && !isNearBottom()) {
+    return;
+  }
+  const el = document.getElementById("messages");
+  el.scrollTop = el.scrollHeight;
+}
+
+// Status bar
+function setStatus(text, dotColor) {
+  document.getElementById("status-text").textContent = text;
+  document.getElementById("status-dot").style.background = dotColor;
+}
+
+// Screen switching
+function showChatScreen() {
+  document.getElementById("join-screen").style.display = "none";
+  const chat = document.getElementById("chat-screen");
+  chat.style.display = "flex";
+  document.getElementById("msg-input").focus();
+}
+
+// Message rendering
+function buildMessageRow(msg) {
+  const isMine = msg.authorId === deviceId;
+  const row = document.createElement("div");
+  row.className = "msg-row " + (isMine ? "mine" : "theirs");
+  row.dataset.id = msg.id;
+
+  if (!isMine) {
+    const author = document.createElement("div");
+    author.className = "msg-author";
+    author.textContent = msg.author;
+    row.appendChild(author);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+  bubble.textContent = msg.text;
+  row.appendChild(bubble);
+
+  const time = document.createElement("div");
+  time.className = "msg-time";
+  time.textContent = formatTime(msg.timestamp);
+  row.appendChild(time);
+
+  return row;
+}
+
+function renderMessages(docs) {
+  const container     = document.getElementById("messages");
+  const wasNearBottom = isNearBottom();
+  const prevTop       = container.scrollTop;
+  const prevHeight    = container.scrollHeight;
+
+  container.innerHTML = "";
+
+  if (docs.length === 0) {
+    const s = document.createElement("div");
+    s.className = "state-msg";
+    s.textContent = "No messages yet. Say hello! 👋";
+    container.appendChild(s);
+    return;
+  }
+
+  let lastDayKey = null;
+  docs.forEach(msg => {
+    if (msg.timestamp) {
+      const d  = msg.timestamp.toDate ? msg.timestamp.toDate() : new Date(msg.timestamp);
+      const dk = localDateKey(d);
+      if (dk !== lastDayKey) {
+        const divider = document.createElement("div");
+        divider.className = "day-divider";
+        divider.textContent = dayLabel(msg.timestamp);
+        container.appendChild(divider);
+        lastDayKey = dk;
+      }
+    }
+    container.appendChild(buildMessageRow(msg));
+  });
+
+  if (wasNearBottom) {
+    container.scrollTop = container.scrollHeight;
+  } else {
+    container.scrollTop = prevTop + (container.scrollHeight - prevHeight);
+  }
+}
+
+// Firestore subscription
+function subscribeMessages() {
+  const container = document.getElementById("messages");
+  container.innerHTML = `<div class="state-msg">Loading…</div>`;
+
+  const q = query(
+    collection(db, "messages"),
+    orderBy("timestamp", "asc"),
+    limit(300)
+  );
+
+  let firstLoad = true;
+
+  onSnapshot(
+    q,
+    snapshot => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const hadOwnMessage = snapshot.docChanges().some(
+        c => c.type === "added" && c.doc.data().authorId === deviceId
+      );
+      renderMessages(docs);
+      if (firstLoad || hadOwnMessage) {
+        scrollToBottom(true);
+      }
+      firstLoad = false;
+      setStatus("Connected", "var(--gold)");
+    },
+    err => {
+      console.error("Firestore error:", err);
+      setStatus("Connection error", "var(--pink)");
+    }
+  );
+}
+
+// Send a message
+async function sendMessage() {
+  const input = document.getElementById("msg-input");
+  const btn   = document.getElementById("send-btn");
+  const text  = input.value.trim();
+  if (!text || !db) {
+    return;
+  }
+
+  input.value = "";
+  input.style.height = "auto";
+  btn.disabled = true;
+
+  try {
+    await addDoc(collection(db, "messages"), {
+      text,
+      author:    userName,
+      authorId:  deviceId,
+      timestamp: serverTimestamp()
+    });
+    setDoc(doc(db, "users", deviceId), {
+      name: userName, deviceId, lastSeen: serverTimestamp()
+    }, { merge: true }).catch(() => {});
+  } catch (err) {
+    console.error("Send failed:", err);
+    toast("Failed to send — check your connection");
+    input.value = text;
+    autoResize(input);
+    btn.disabled = false;
+  }
+}
+
+// Push notifications
+async function registerToken() {
+  if (!messaging || !db || !swReg) {
+    return;
+  }
+  try {
+    const token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: swReg
+    });
+    if (token) {
+      await setDoc(doc(db, "tokens", deviceId), {
+        token, deviceId, name: userName, updatedAt: serverTimestamp()
+      });
+    }
+  } catch (err) {
+    console.warn("FCM token error:", err);
+  }
+}
+
+async function requestNotifications() {
+  if (!("Notification" in window)) {
+    toast("Notifications not supported on this device");
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm === "granted") {
+    document.getElementById("notif-btn").classList.add("active");
+    document.getElementById("notif-banner").hidden = true;
+    toast("Notifications enabled ✓");
+    await registerToken();
+  } else {
+    toast("Notification permission denied");
+  }
+}
+
+function updateNotifButtonState() {
+  if (!("Notification" in window)) {
+    return;
+  }
+  if (Notification.permission === "granted") {
+    document.getElementById("notif-btn").classList.add("active");
+  } else if (Notification.permission === "default") {
+    document.getElementById("notif-banner").hidden = false;
+  }
+}
+
+// Start chatting
+async function startChat(name) {
+  if (!FIREBASE_READY) {
+    document.getElementById("join-error").textContent =
+      "App not configured yet — Firebase credentials are missing.";
+    document.getElementById("join-btn").disabled = false;
+    return;
+  }
+
+  userName = name;
+  localStorage.setItem(STORAGE_NAME_KEY, name);
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  db = getFirestore(app);
+
+  try {
+    messaging = getMessaging(app);
+    onMessage(messaging, payload => {
+      const sender = payload.notification?.title || "New message";
+      const body   = payload.notification?.body  || "";
+      toast(`${sender}: ${body}`);
+    });
+  } catch {
+    messaging = null;
+  }
+
+  setDoc(doc(db, "users", deviceId), {
+    name, deviceId, lastSeen: serverTimestamp()
+  }, { merge: true }).catch(() => {});
+
+  showChatScreen();
+  subscribeMessages();
+  updateNotifButtonState();
+
+  if (Notification.permission === "granted") {
+    registerToken();
+  }
+}
+
+// Auto-join if already registered
+const savedName = localStorage.getItem(STORAGE_NAME_KEY);
+if (savedName) {
+  startChat(savedName);
+}
+
+// Join form
+document.getElementById("join-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name  = document.getElementById("join-name").value.trim();
+  const code  = document.getElementById("join-code").value.trim();
+  const errEl = document.getElementById("join-error");
+  const btn   = document.getElementById("join-btn");
+
+  if (!name) {
+    errEl.textContent = "Please enter your name.";
+    return;
+  }
+  if (!code) {
+    errEl.textContent = "Please enter the invite code.";
+    return;
+  }
+  if (code !== INVITE_CODE) {
+    errEl.textContent = "Incorrect invite code. Try again.";
+    return;
+  }
+
+  errEl.textContent = "";
+  btn.disabled = true;
+  await startChat(name);
+  btn.disabled = false;
+});
+
+// Message input
+const msgInput = document.getElementById("msg-input");
+
+msgInput.addEventListener("input", () => {
+  autoResize(msgInput);
+  document.getElementById("send-btn").disabled = !msgInput.value.trim();
+});
+
+msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+document.getElementById("send-btn").addEventListener("click", sendMessage);
+
+// Notification buttons
+document.getElementById("notif-btn").addEventListener("click", requestNotifications);
+document.getElementById("notif-allow-btn").addEventListener("click", requestNotifications);
+document.getElementById("notif-dismiss").addEventListener("click", () => {
+  document.getElementById("notif-banner").hidden = true;
+});
+
+// Settings modal
+const settingsModal = document.getElementById("settings-modal");
+
+document.getElementById("settings-btn").addEventListener("click", () => {
+  document.getElementById("settings-name").value = userName;
+  settingsModal.classList.add("open");
+});
+
+settingsModal.addEventListener("click", e => {
+  if (e.target === settingsModal) {
+    settingsModal.classList.remove("open");
+  }
+});
+
+document.getElementById("settings-save").addEventListener("click", () => {
+  const newName = document.getElementById("settings-name").value.trim();
+  if (!newName) {
+    return;
+  }
+  userName = newName;
+  localStorage.setItem(STORAGE_NAME_KEY, newName);
+  if (db) {
+    setDoc(doc(db, "users", deviceId), {
+      name: newName, deviceId, lastSeen: serverTimestamp()
+    }, { merge: true }).catch(() => {});
+  }
+  settingsModal.classList.remove("open");
+  toast("Name updated ✓");
+});
+
+document.getElementById("settings-signout").addEventListener("click", () => {
+  if (!confirm("Sign out? You'll need to enter the invite code again.")) {
+    return;
+  }
+  localStorage.removeItem(STORAGE_NAME_KEY);
+  location.reload();
+});
+
+// Service worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./firebase-messaging-sw.js")
+    .then(reg => { swReg = reg; })
+    .catch(err => console.warn("SW registration failed:", err));
+}
+</script>
+</body>
+</html>
