@@ -229,6 +229,8 @@
       flex-shrink: 0;
     }
 
+    #notif-banner[hidden] { display: none; }
+
     #notif-banner span { flex: 1; }
 
     #notif-allow-btn {
@@ -889,7 +891,8 @@ function updateNotifButtonState() {
   }
   if (Notification.permission === "granted") {
     document.getElementById("notif-btn").classList.add("active");
-  } else if (Notification.permission === "default") {
+  } else if (Notification.permission === "default"
+         && !sessionStorage.getItem("jchat-notif-dismissed")) {
     document.getElementById("notif-banner").hidden = false;
   }
 }
@@ -988,6 +991,7 @@ document.getElementById("notif-btn").addEventListener("click", requestNotificati
 document.getElementById("notif-allow-btn").addEventListener("click", requestNotifications);
 document.getElementById("notif-dismiss").addEventListener("click", () => {
   document.getElementById("notif-banner").hidden = true;
+  sessionStorage.setItem("jchat-notif-dismissed", "1");
 });
 
 // Settings modal

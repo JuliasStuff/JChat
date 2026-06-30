@@ -12,13 +12,16 @@ def make_icon(size, maskable=False):
     img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    pad    = int(size * 0.12) if maskable else 0
-    radius = int((size - pad * 2) * 0.22)
-    draw.rounded_rectangle([pad, pad, size - pad, size - pad],
-                            radius=radius, fill=TEAL)
+    if maskable:
+        # Full-bleed teal background — Android will mask it into its own shape
+        draw.rectangle([0, 0, size, size], fill=TEAL)
+    else:
+        radius = int(size * 0.22)
+        draw.rounded_rectangle([0, 0, size, size], radius=radius, fill=TEAL)
 
     cx, cy = size // 2, size // 2
-    s = size * 0.26
+    # Shrink the bubble for maskable so it stays inside the ~80% safe zone
+    s = size * (0.21 if maskable else 0.26)
 
     # Main bubble body
     bx0 = cx - s

@@ -24,14 +24,19 @@ const APP_URL = "https://juliasstuff.github.io/JChat/";
 exports.onNewMessage = onDocumentCreated("messages/{msgId}", async event => {
   const msg = event.data?.data();
   if (!msg?.text || !msg?.author) {
+    console.log("Skipping: missing text or author");
     return;
   }
 
   const tokensSnap = await db.collection("tokens").get();
-  const targets    = tokensSnap.docs.filter(d => d.data().deviceId !== msg.authorId);
+  const allDocs    = tokensSnap.docs;
+  const targets    = allDocs.filter(d => d.data().deviceId !== msg.authorId);
   const tokens     = targets.map(d => d.data().token).filter(Boolean);
 
+  console.log(`Message from ${msg.author} (${msg.authorId}): ${allDocs.length} total tokens, ${tokens.length} recipients`);
+
   if (tokens.length === 0) {
+    console.log("No recipient tokens — nothing to send");
     return;
   }
 
@@ -54,6 +59,13 @@ exports.onNewMessage = onDocumentCreated("messages/{msgId}", async event => {
       fcmOptions: {
         link: APP_URL
       }
+    }
+  });
+
+  console.log(`FCM result: ${response.successCount} success, ${response.failureCount} failure`);
+  response.responses.forEach((r, i) => {
+    if (!r.success) {
+      console.warn(`  token[${i}] failed: ${r.error?.code} — ${r.error?.message}`);
     }
   });
 
