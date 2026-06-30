@@ -22,6 +22,7 @@
       --mint:     #F7FFF7;
       --pink:     #FF6B6B;
       --gold:     #FFE66D;
+      --green:    #34C759;
       --ink:      #1A535C;
       --ink-soft: #5a8a90;
       --bg:       #F7FFF7;
@@ -632,7 +633,7 @@
   <header class="topbar">
     <span class="topbar-logo">💬</span>
     <div class="topbar-info">
-      <div class="topbar-title">JChat<span class="topbar-version">v2026.06.30-5</span></div>
+      <div class="topbar-title">JChat<span class="topbar-version">v2026.06.30-6</span></div>
       <div class="topbar-status" id="topbar-status">
         <span class="status-dot" id="status-dot"></span>
         <span id="status-text">Connecting…</span>
@@ -964,7 +965,7 @@ function subscribeMessages() {
         scrollToBottom(true);
       }
       firstLoad = false;
-      setStatus("Connected", "var(--gold)");
+      setStatus("Connected", "var(--green)");
     },
     err => {
       console.error("Firestore error:", err);
