@@ -315,17 +315,60 @@
     }
 
     .mine .msg-bubble {
-      background: var(--cyan);
-      color: var(--teal);
       border-bottom-right-radius: 5px;
     }
 
     .theirs .msg-bubble {
-      background: var(--panel);
-      color: var(--ink);
-      border: 1px solid var(--line);
       border-bottom-left-radius: 5px;
     }
+
+    /* Color swatch picker */
+    .color-swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .color-swatch {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      padding: 0;
+      cursor: pointer;
+      transition: transform .12s, border-color .12s;
+    }
+
+    .color-swatch:hover { transform: scale(1.06); }
+
+    .color-swatch.selected {
+      border-color: var(--ink);
+      transform: scale(1.1);
+    }
+
+    /* Notification row */
+    .notif-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    #notif-status-text { flex: 1; }
+
+    .btn-mini {
+      padding: 7px 16px;
+      background: var(--teal);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      border-radius: 18px;
+      transition: opacity .15s;
+    }
+
+    .btn-mini:hover { opacity: .9; }
 
     .msg-time {
       font-size: 10px;
@@ -552,13 +595,12 @@
   <header class="topbar">
     <span class="topbar-logo">💬</span>
     <div class="topbar-info">
-      <div class="topbar-title">JChat<span class="topbar-version">v2026.06.30-2</span></div>
+      <div class="topbar-title">JChat<span class="topbar-version">v2026.06.30-4</span></div>
       <div class="topbar-status" id="topbar-status">
         <span class="status-dot" id="status-dot"></span>
         <span id="status-text">Connecting…</span>
       </div>
     </div>
-    <button class="topbar-btn" id="notif-btn" title="Enable notifications" aria-label="Notifications">🔔</button>
     <button class="topbar-btn" id="settings-btn" title="Settings" aria-label="Settings">⚙️</button>
   </header>
 
@@ -586,10 +628,16 @@
     </div>
     <div class="sheet-body">
       <div class="setting-row">
-        <div class="setting-label">Display name</div>
-        <input id="settings-name" type="text" maxlength="30" autocomplete="name" />
+        <div class="setting-label">Your bubble color</div>
+        <div class="color-swatches" id="color-swatches"></div>
       </div>
-      <button class="btn-save" id="settings-save">Save name</button>
+      <div class="setting-row">
+        <div class="setting-label">Notifications</div>
+        <div class="notif-row">
+          <span id="notif-status-text">…</span>
+          <button class="btn-mini" id="settings-notif-btn" hidden>Enable</button>
+        </div>
+      </div>
       <button class="btn-signout" id="settings-signout">Sign out</button>
     </div>
   </div>
@@ -646,6 +694,52 @@ let swReg     = null;
 let swReady   = null;
 let userName  = "";
 let toastTimer = null;
+
+// Register the service worker immediately so it's ready by the time we
+// need an FCM token. Doing this before any auto-join logic avoids a race
+// where registerToken() runs before swReady is set.
+if ("serviceWorker" in navigator) {
+  swReady = navigator.serviceWorker.register("./firebase-messaging-sw.js");
+  swReady
+    .then(reg => { swReg = reg; })
+    .catch(err => console.warn("SW registration failed:", err));
+}
+
+// Bubble color palette and per-user color
+const BUBBLE_PALETTE = [
+  "#4ECDC4", "#FFE66D", "#FF6B6B", "#C8B6FF", "#FFB5E8",
+  "#95E1D3", "#A8DADC", "#FFD3A5", "#B8E0D2", "#F6BD60"
+];
+const STORAGE_COLOR_KEY = "jchat-color";
+let myColor = "";
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function defaultColorFor(name) {
+  return BUBBLE_PALETTE[hashStr(name || "") % BUBBLE_PALETTE.length];
+}
+
+function bubbleColorFor(msg) {
+  return msg.color || defaultColorFor(msg.author);
+}
+
+function contrastTextFor(hex) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (lum > 0.62) {
+    return "var(--ink)";
+  }
+  return "#fff";
+}
 
 // Toast
 function toast(text) {
@@ -742,6 +836,9 @@ function buildMessageRow(msg) {
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
+  const color = bubbleColorFor(msg);
+  bubble.style.background = color;
+  bubble.style.color = contrastTextFor(color);
   bubble.textContent = msg.text;
   row.appendChild(bubble);
 
@@ -844,6 +941,7 @@ async function sendMessage() {
       text,
       author:    userName,
       authorId:  deviceId,
+      color:     myColor,
       timestamp: serverTimestamp()
     });
     setDoc(doc(db, "users", deviceId), {
@@ -863,16 +961,14 @@ async function registerToken() {
   if (!messaging || !db) {
     return;
   }
-  if (!swReg && swReady) {
-    try {
-      swReg = await swReady;
-    } catch (err) {
-      console.warn("SW not ready:", err);
-      return;
-    }
-  }
-  if (!swReg) {
+  if (!swReady) {
     console.warn("No service worker registration — cannot get FCM token");
+    return;
+  }
+  try {
+    swReg = await swReady;
+  } catch (err) {
+    console.warn("SW not ready:", err);
     return;
   }
   try {
@@ -899,23 +995,21 @@ async function requestNotifications() {
   }
   const perm = await Notification.requestPermission();
   if (perm === "granted") {
-    document.getElementById("notif-btn").classList.add("active");
     document.getElementById("notif-banner").hidden = true;
     toast("Notifications enabled ✓");
     await registerToken();
   } else {
     toast("Notification permission denied");
   }
+  renderNotifStatus();
 }
 
 function updateNotifButtonState() {
   if (!("Notification" in window)) {
     return;
   }
-  if (Notification.permission === "granted") {
-    document.getElementById("notif-btn").classList.add("active");
-  } else if (Notification.permission === "default"
-         && !sessionStorage.getItem("jchat-notif-dismissed")) {
+  if (Notification.permission === "default"
+      && !sessionStorage.getItem("jchat-notif-dismissed")) {
     document.getElementById("notif-banner").hidden = false;
   }
 }
@@ -931,6 +1025,7 @@ async function startChat(name) {
 
   userName = name;
   localStorage.setItem(STORAGE_NAME_KEY, name);
+  myColor = localStorage.getItem(STORAGE_COLOR_KEY) || defaultColorFor(name);
 
   const app = initializeApp(FIREBASE_CONFIG);
   db = getFirestore(app);
@@ -1009,8 +1104,7 @@ msgInput.addEventListener("keydown", e => {
 
 document.getElementById("send-btn").addEventListener("click", sendMessage);
 
-// Notification buttons
-document.getElementById("notif-btn").addEventListener("click", requestNotifications);
+// Notification banner
 document.getElementById("notif-allow-btn").addEventListener("click", requestNotifications);
 document.getElementById("notif-dismiss").addEventListener("click", () => {
   document.getElementById("notif-banner").hidden = true;
@@ -1020,8 +1114,54 @@ document.getElementById("notif-dismiss").addEventListener("click", () => {
 // Settings modal
 const settingsModal = document.getElementById("settings-modal");
 
+function renderColorSwatches() {
+  const container = document.getElementById("color-swatches");
+  container.innerHTML = "";
+  for (const c of BUBBLE_PALETTE) {
+    const sw = document.createElement("button");
+    sw.type = "button";
+    sw.className = "color-swatch" + (c === myColor ? " selected" : "");
+    sw.style.background = c;
+    sw.setAttribute("aria-label", "Choose color " + c);
+    sw.addEventListener("click", () => setMyColor(c));
+    container.appendChild(sw);
+  }
+}
+
+function setMyColor(c) {
+  myColor = c;
+  localStorage.setItem(STORAGE_COLOR_KEY, c);
+  if (db) {
+    setDoc(doc(db, "users", deviceId), {
+      name: userName, deviceId, color: c, lastSeen: serverTimestamp()
+    }, { merge: true }).catch(() => {});
+  }
+  renderColorSwatches();
+}
+
+function renderNotifStatus() {
+  const text = document.getElementById("notif-status-text");
+  const btn = document.getElementById("settings-notif-btn");
+  if (!("Notification" in window)) {
+    text.textContent = "Not supported on this device";
+    btn.hidden = true;
+    return;
+  }
+  if (Notification.permission === "granted") {
+    text.textContent = "Enabled";
+    btn.hidden = true;
+  } else if (Notification.permission === "denied") {
+    text.textContent = "Blocked in browser settings";
+    btn.hidden = true;
+  } else {
+    text.textContent = "Off";
+    btn.hidden = false;
+  }
+}
+
 document.getElementById("settings-btn").addEventListener("click", () => {
-  document.getElementById("settings-name").value = userName;
+  renderColorSwatches();
+  renderNotifStatus();
   settingsModal.classList.add("open");
 });
 
@@ -1031,21 +1171,7 @@ settingsModal.addEventListener("click", e => {
   }
 });
 
-document.getElementById("settings-save").addEventListener("click", () => {
-  const newName = document.getElementById("settings-name").value.trim();
-  if (!newName) {
-    return;
-  }
-  userName = newName;
-  localStorage.setItem(STORAGE_NAME_KEY, newName);
-  if (db) {
-    setDoc(doc(db, "users", deviceId), {
-      name: newName, deviceId, lastSeen: serverTimestamp()
-    }, { merge: true }).catch(() => {});
-  }
-  settingsModal.classList.remove("open");
-  toast("Name updated ✓");
-});
+document.getElementById("settings-notif-btn").addEventListener("click", requestNotifications);
 
 document.getElementById("settings-signout").addEventListener("click", () => {
   if (!confirm("Sign out? You'll need to enter the invite code again.")) {
@@ -1054,14 +1180,6 @@ document.getElementById("settings-signout").addEventListener("click", () => {
   localStorage.removeItem(STORAGE_NAME_KEY);
   location.reload();
 });
-
-// Service worker
-if ("serviceWorker" in navigator) {
-  swReady = navigator.serviceWorker.register("./firebase-messaging-sw.js");
-  swReady
-    .then(reg => { swReg = reg; })
-    .catch(err => console.warn("SW registration failed:", err));
-}
 </script>
 </body>
 </html>
