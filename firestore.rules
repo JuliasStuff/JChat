@@ -18,13 +18,15 @@ service cloud.firestore {
     }
 
     // FCM device tokens: clients write their own token. No client reads —
-    // only the Cloud Function (admin SDK) needs them.
+    // only the Cloud Function (admin SDK) needs them. Anyone can delete
+    // (used by the in-app notifications toggle to opt out).
     match /tokens/{deviceId} {
       allow read: if false;
-      allow write: if request.resource.data.token is string
-                && request.resource.data.token.size() < 500
-                && request.resource.data.deviceId is string
-                && request.resource.data.deviceId.size() < 200;
+      allow delete: if true;
+      allow create, update: if request.resource.data.token is string
+                         && request.resource.data.token.size() < 500
+                         && request.resource.data.deviceId is string
+                         && request.resource.data.deviceId.size() < 200;
     }
 
     // Presence/profile: clients write their own profile.

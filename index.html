@@ -370,6 +370,43 @@
 
     .btn-mini:hover { opacity: .9; }
 
+    /* On/off toggle switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #c5d4d3;
+      border-radius: 24px;
+      transition: background .2s;
+    }
+    .switch-slider::before {
+      content: "";
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.18);
+    }
+    .switch input:checked + .switch-slider { background: var(--teal); }
+    .switch input:checked + .switch-slider::before { transform: translateX(20px); }
+    .switch input:disabled + .switch-slider { opacity: .5; cursor: not-allowed; }
+
     .msg-time {
       font-size: 10px;
       color: var(--ink-soft);
@@ -595,7 +632,7 @@
   <header class="topbar">
     <span class="topbar-logo">💬</span>
     <div class="topbar-info">
-      <div class="topbar-title">JChat<span class="topbar-version">v2026.06.30-4</span></div>
+      <div class="topbar-title">JChat<span class="topbar-version">v2026.06.30-5</span></div>
       <div class="topbar-status" id="topbar-status">
         <span class="status-dot" id="status-dot"></span>
         <span id="status-text">Connecting…</span>
@@ -635,7 +672,10 @@
         <div class="setting-label">Notifications</div>
         <div class="notif-row">
           <span id="notif-status-text">…</span>
-          <button class="btn-mini" id="settings-notif-btn" hidden>Enable</button>
+          <label class="switch">
+            <input type="checkbox" id="notif-toggle" />
+            <span class="switch-slider"></span>
+          </label>
         </div>
       </div>
       <button class="btn-signout" id="settings-signout">Sign out</button>
@@ -649,10 +689,10 @@
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, query, orderBy, limit,
-  onSnapshot, serverTimestamp, doc, setDoc
+  onSnapshot, serverTimestamp, doc, setDoc, deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import {
-  getMessaging, getToken, onMessage
+  getMessaging, getToken, deleteToken, onMessage
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-messaging.js";
 
 // CONFIG — paste your Firebase values here after creating the project.
@@ -711,7 +751,17 @@ const BUBBLE_PALETTE = [
   "#95E1D3", "#A8DADC", "#FFD3A5", "#B8E0D2", "#F6BD60"
 ];
 const STORAGE_COLOR_KEY = "jchat-color";
+const STORAGE_NOTIF_ENABLED_KEY = "jchat-notif-enabled";
 let myColor = "";
+
+function isNotifEnabled() {
+  const v = localStorage.getItem(STORAGE_NOTIF_ENABLED_KEY);
+  if (v === null) {
+    // First-time users: default to "on" if permission was already granted before this toggle existed.
+    return "Notification" in window && Notification.permission === "granted";
+  }
+  return v === "1";
+}
 
 function hashStr(s) {
   let h = 0;
@@ -988,19 +1038,45 @@ async function registerToken() {
   }
 }
 
-async function requestNotifications() {
+async function enableNotifications() {
   if (!("Notification" in window)) {
     toast("Notifications not supported on this device");
+    renderNotifStatus();
     return;
   }
-  const perm = await Notification.requestPermission();
-  if (perm === "granted") {
-    document.getElementById("notif-banner").hidden = true;
-    toast("Notifications enabled ✓");
-    await registerToken();
-  } else {
-    toast("Notification permission denied");
+  let perm = Notification.permission;
+  if (perm === "default") {
+    perm = await Notification.requestPermission();
   }
+  if (perm !== "granted") {
+    toast("Notification permission denied");
+    renderNotifStatus();
+    return;
+  }
+  localStorage.setItem(STORAGE_NOTIF_ENABLED_KEY, "1");
+  document.getElementById("notif-banner").hidden = true;
+  await registerToken();
+  toast("Notifications turned on");
+  renderNotifStatus();
+}
+
+async function disableNotifications() {
+  localStorage.setItem(STORAGE_NOTIF_ENABLED_KEY, "0");
+  if (db) {
+    try {
+      await deleteDoc(doc(db, "tokens", deviceId));
+    } catch (err) {
+      console.warn("Failed to delete token doc:", err);
+    }
+  }
+  if (messaging) {
+    try {
+      await deleteToken(messaging);
+    } catch (err) {
+      console.warn("Failed to invalidate FCM token:", err);
+    }
+  }
+  toast("Notifications turned off");
   renderNotifStatus();
 }
 
@@ -1049,7 +1125,7 @@ async function startChat(name) {
   subscribeMessages();
   updateNotifButtonState();
 
-  if (Notification.permission === "granted") {
+  if (Notification.permission === "granted" && isNotifEnabled()) {
     registerToken();
   }
 }
@@ -1105,7 +1181,7 @@ msgInput.addEventListener("keydown", e => {
 document.getElementById("send-btn").addEventListener("click", sendMessage);
 
 // Notification banner
-document.getElementById("notif-allow-btn").addEventListener("click", requestNotifications);
+document.getElementById("notif-allow-btn").addEventListener("click", enableNotifications);
 document.getElementById("notif-dismiss").addEventListener("click", () => {
   document.getElementById("notif-banner").hidden = true;
   sessionStorage.setItem("jchat-notif-dismissed", "1");
@@ -1141,21 +1217,26 @@ function setMyColor(c) {
 
 function renderNotifStatus() {
   const text = document.getElementById("notif-status-text");
-  const btn = document.getElementById("settings-notif-btn");
+  const toggle = document.getElementById("notif-toggle");
   if (!("Notification" in window)) {
     text.textContent = "Not supported on this device";
-    btn.hidden = true;
+    toggle.checked = false;
+    toggle.disabled = true;
     return;
   }
-  if (Notification.permission === "granted") {
-    text.textContent = "Enabled";
-    btn.hidden = true;
-  } else if (Notification.permission === "denied") {
+  if (Notification.permission === "denied") {
     text.textContent = "Blocked in browser settings";
-    btn.hidden = true;
+    toggle.checked = false;
+    toggle.disabled = true;
+    return;
+  }
+  toggle.disabled = false;
+  if (Notification.permission === "granted" && isNotifEnabled()) {
+    text.textContent = "On";
+    toggle.checked = true;
   } else {
     text.textContent = "Off";
-    btn.hidden = false;
+    toggle.checked = false;
   }
 }
 
@@ -1171,7 +1252,13 @@ settingsModal.addEventListener("click", e => {
   }
 });
 
-document.getElementById("settings-notif-btn").addEventListener("click", requestNotifications);
+document.getElementById("notif-toggle").addEventListener("change", e => {
+  if (e.target.checked) {
+    enableNotifications();
+  } else {
+    disableNotifications();
+  }
+});
 
 document.getElementById("settings-signout").addEventListener("click", () => {
   if (!confirm("Sign out? You'll need to enter the invite code again.")) {
